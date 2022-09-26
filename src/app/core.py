@@ -66,8 +66,6 @@ def get_result_paginated(task_id):
             "traceback": task_result.traceback,
         }
     else:
-        filename = "/storage/rdfind-result-test.txt"
-        result["filename"] = filename
         start = (page - 1) * page_size
         end = page * page_size
         rows, total_rows = read_rows_from(result["filename"], start, end, sort_field)
