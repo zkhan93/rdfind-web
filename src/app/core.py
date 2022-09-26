@@ -44,7 +44,7 @@ def get_status(task_id):
             "error": str(task_result.result),
             "traceback": task_result.traceback,
         }
-    if "filename" in result:  # this identifies analysis tasks
+    if result and "filename" in result:  # this identifies analysis tasks
         if request.args.get("rows", "true") == "true":
             result["rows"] = read_rows_from(result["filename"], 0, None)
     res = {"id": task_id, "status": task_result.status, "result": result}

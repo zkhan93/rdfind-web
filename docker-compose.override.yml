@@ -2,6 +2,7 @@ version: "3"
 
 services:
   web:
+    build: src
     volumes:
       - ./src:/app
       - ./storage:/storage
@@ -11,6 +12,7 @@ services:
       - FLASK_APP=app
 
   worker:
+    build: src
     volumes:
       - ./src:/app
       - ./storage:/storage

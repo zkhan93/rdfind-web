@@ -2,7 +2,7 @@ version: "3"
 
 services:
   web:
-    build: src
+    image: zkhan93/rdfind-web:master
     ports:
       - 3000:80
     command:
@@ -23,7 +23,7 @@ services:
     restart: unless-stopped
 
   worker:
-    build: src
+    image: zkhan93/rdfind-web:master
     command:
       [
         "celery",
