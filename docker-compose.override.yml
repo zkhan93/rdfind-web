@@ -4,6 +4,7 @@ services:
   web:
     volumes:
       - ./src:/app
+      - ./storage:/storage
     command: [ "flask", "run", "--host=0.0.0.0", "--port=80" ]
     environment:
       - FLASK_ENV=development

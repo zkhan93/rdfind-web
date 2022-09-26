@@ -2,7 +2,7 @@ import logging
 import os
 from celery import Celery
 import csv
-from itertools import islice
+from collections import defaultdict
 
 logging.basicConfig(level=logging.INFO)
 
@@ -41,16 +41,31 @@ def init_celery(celery, app):
     return celery
 
 
-def read_rows_from(filename, start, end):
+def read_rows_from(filename, start, end, sort_by):
+    reverse = False
+    if sort_by:
+        if sort_by.startswith("-"):
+            reverse = True
+            sort_by = sort_by[1:]
+
     with open(filename, "r") as res:
         reader = csv.DictReader(
             res,
             delimiter=" ",
             quotechar='"',
         )
-        rows = list(reader)
+        rows = reader
+        if sort_by:
+            type_map = defaultdict(lambda: str)
+            type_map["size"] = int
+            rows = sorted(
+                reader, key=lambda x: type_map[sort_by](x[sort_by]), reverse=reverse
+            )
+        else:
+            rows = list(reader)
         row_count = len(rows)
         page_rows = []
+        print(start, end)
         for index, row in enumerate(rows[start:end]):
             row["key"] = index + start
             row["duptype"] = {

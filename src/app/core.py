@@ -5,6 +5,7 @@ from flask import jsonify, request, Blueprint
 from utils import create_celery, init_celery, read_rows_from
 import rdfind
 import math
+import os
 
 # from app import app, celery
 
@@ -34,7 +35,7 @@ def index(file="index"):
 
 @bp.route("/tasks/<task_id>", methods=["GET"])
 def get_status(task_id):
-    include_rows = request.args.get("rows", "true") == "true"
+
     task_result = celery.AsyncResult(task_id)
     result = task_result.result
 
@@ -43,8 +44,9 @@ def get_status(task_id):
             "error": str(task_result.result),
             "traceback": task_result.traceback,
         }
-    if include_rows:
-        result["rows"] = read_rows_from(result["filename"], 0, None)
+    if "filename" in result:  # this identifies analysis tasks
+        if request.args.get("rows", "true") == "true":
+            result["rows"] = read_rows_from(result["filename"], 0, None)
     res = {"id": task_id, "status": task_result.status, "result": result}
     return jsonify(res)
 
@@ -53,6 +55,7 @@ def get_status(task_id):
 def get_result_paginated(task_id):
     page = int(request.args.get("page", "1"))
     page_size = int(request.args.get("page_size", "100"))
+    sort_field = request.args.get("sort")
 
     task_result = celery.AsyncResult(task_id)
     result = task_result.result
@@ -63,9 +66,11 @@ def get_result_paginated(task_id):
             "traceback": task_result.traceback,
         }
     else:
+        filename = "/storage/rdfind-result-test.txt"
+        result["filename"] = filename
         start = (page - 1) * page_size
         end = page * page_size
-        rows, total_rows = read_rows_from(result["filename"], start, end)
+        rows, total_rows = read_rows_from(result["filename"], start, end, sort_field)
         last_page = math.ceil(total_rows / page_size) or 1
         result = {
             "page": page,

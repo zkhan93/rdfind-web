@@ -151,10 +151,13 @@
               :search="search"
               :headers="columns"
               :items="transformed_rows"
-              :items-per-page="50"
-              show-select
               item-key="key"
-              :options="table_options" 
+              :loading="analyze_progress"
+              :items-per-page="items_per_page"
+              :sort-by.sync="sort_by"
+              :sort-desc.sync="sort_desc"
+              hide-default-footer
+              show-select
               dense
             >
               <template v-slot:top>
@@ -167,6 +170,12 @@
                   ></v-text-field>
               </template>
             </v-data-table>
+            <v-pagination
+              v-model="page"
+              :length="page_count"
+              :total-visible="7"
+              @input="page = $event"
+            ></v-pagination>
           </v-container>
         </v-main>
       </v-app>
@@ -225,10 +234,11 @@
               checksum: 'sha1',
               ignoreempty: true,
             },
-            table_options:{
-              page: 1,
-              itemsPerPage: 50,
-            },
+            page: 0,
+            page_count: 1,
+            items_per_page: 50,
+            sort_by: null,
+            sort_desc: false,
             rows: [],
             selected_task_id: null,
             analyze_progress: false,
@@ -236,15 +246,12 @@
             current_task_id: null,
             task_timeout: undefined,
             size_label: "Bytes",
+            
             size_map: {
               "Bytes": 1,
               "KB": 1024,
               "MB": 1024*1024,
               "GB": 1024*1024*1024
-            },
-            current_analysis_page:{
-              page: 1,
-              page_size: 1000
             },
             search: '',
             columns:[
@@ -257,9 +264,17 @@
         },
         watch:{
           selected_task_id(){
-            
             this.wait_for_rd_analysis_task(this.selected_task_id)
           },
+          page(){
+            this.refetch_page()
+          },
+          sort_by(){
+            this.refetch_page()
+          },
+          sort_desc(){
+            this.refetch_page()
+          }
         },
         computed: {
           ...Pinia.mapWritableState(resultsStore, ['analysis', "selected"]),
@@ -289,6 +304,10 @@
           }
         },
         methods: {
+          refetch_page(){
+            this.rows.splice(0,this.rows.length)
+            this.fetch_paginated_rows(this.selected_task_id, this.page, this.items_per_page)
+          },
           date_format(datetime){
             return moment(datetime).fromNow()
           },
@@ -357,7 +376,7 @@
                     this.analyze_progress = false;
                     this.showDialog(data.result.stdout)
                     this.rows.splice(0, this.rows.length)
-                    this.fetch_paginated_rows(task_id, 1, 1000)
+                    this.page = 1
                   },
                   (data) => {
                     this.analyze_progress = false;
@@ -410,14 +429,15 @@
             this.dialog.content = content
           },
           fetch_paginated_rows(task_id, page, page_size){
+            var sort = ''
+            if (this.sort_by)
+              sort = this.sort_desc ? '-' + this.sort_by : this.sort_by
             axios
-              .get(`/tasks/${task_id}/rows?page=${page}&page_size=${page_size}`)
+              .get(`/tasks/${task_id}/rows?page=${page}&page_size=${page_size}&sort=${sort}`)
               .then((res) => {
                 this.rows.push(...res.data.result.rows)
-                this.current_analysis_page.page = res.data.page
-                this.current_analysis_page.page_size = res.data.page_size
-                this.current_analysis_page.next = res.data.next
-                this.current_analysis_page.last_page = res.data.last_page
+                this.page_count = res.data.last_page
+                console.log(this.page_count)
               })
               .catch(error=>{
                 console.log(error)

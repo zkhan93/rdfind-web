@@ -31,15 +31,6 @@ def analyze(params):
         ],
         capture_output=True,
     )
-    # os.system(f"cp /storage/rdfind-result-test.txt {filename}")
-
-    # class O:
-    #     stderr = b""
-    #     stdout = b"this is a log"
-
-    # cp = O()
-
-    # strip first and last line from result file
     os.system(f"sed -i '1d;$d' {filename}")
     os.system(f"sed -i '1s/^. //' {filename}")
     os.system(f"sed -i 's/\/\(.*\)/\"\/\\1\"/' {filename}")
