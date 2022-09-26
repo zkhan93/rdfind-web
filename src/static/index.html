@@ -49,9 +49,33 @@
         <v-main>
           <v-container>
             <v-row center>
-              <v-col>
+              <v-col cols="6">
                 <h4>Start</h4>
-                <v-text-field v-model="path"></v-text-field>
+                <v-text-field v-model="args.path"></v-text-field>
+                <v-row>
+                  <v-col>
+                    <v-text-field
+                      v-model="args.minsize"
+                      type="number"
+                      label="Minimum size"
+                      required
+                    />
+                  </v-col>
+                  <v-col>
+                    <v-select 
+                    v-model="args.checksum"
+                    label="Checksum"
+                    :items="['md5','sha1', 'sha256']"
+                    item-name="name"
+                    />
+                  </v-col>
+                  <v-col>
+                    <v-switch
+                    v-model="args.ignoreempty"
+                    label="Ignore Empty"
+                    />
+                  </v-col>
+                </v-row>
                 <v-btn small color="primary" @click="run_rdfind" :disabled="analyze_progress" :loading="analyze_progress">Run rdfind</v-btn>
                 <v-btn class="ma-1" small color="warning" @click="clear_session"> Clear Session</v-btn>
               </v-col>
@@ -59,21 +83,19 @@
                 <v-row >
                   <v-col class="text-center">
                     <h4>Stats</h4>
-                    <v-btn class="mx-1" :class="{primary: size_label==v}"  x-small v-for="k, v in size_map" :key="k" @click="size_label=v">{{v}}</v-btn>
+                  </v-col>
+                </v-row>
+                <v-row class="mt-1">
+                  <v-col class="text-center">
+                    Files<br/> <b>{{selected.length}}/{{rows.length}}</b><br/>
+                    Size<br> <b>{{ Math.round((selected_size / size_factor) * 100, 2) / 100}}/{{ Math.round((total_size / size_factor) * 100, 2) / 100}} {{size_label}}</b>
+                    <br/>
+                    <v-btn class="mt-3 mx-1" :class="{primary: size_label==v}"  x-small v-for="k, v in size_map" :key="k" @click="size_label=v">{{v}}</v-btn>
                   </v-col>
                 </v-row>
                 
-                <v-row class="mt-1">
-                  <v-col>Total Files: <b>{{rows.length}}</b></v-col>
-                  <v-col class="text-right">Total: <b>{{ Math.round((total_size / size_factor) * 100, 2) / 100}} {{size_label}}</b></v-col>
-                </v-row>
-                <v-row>
-                  <v-col>Selected Files: <b>{{selected.length}}</b></v-col>
-                  <v-col class="text-right">Selected: <b>{{ Math.round((selected_size / size_factor) * 100, 2) / 100}} {{size_label}}</b></v-col>
-                </v-row>
-                
               </v-col>
-              <v-col>
+              <v-col class="text-center">
                 <h4>Actions</h4>
                 <v-btn class="ma-1" small color="error" @click="delete_selected" :loading="delete_progress" :disabled="delete_progress"> Delete selected Files</v-btn>
                 <v-btn class="ma-1" small color="error" disabled> Replace files with hard links</v-btn>
@@ -85,7 +107,7 @@
               v-model="selected"
               :search="search"
               :headers="columns"
-              :items="rows"
+              :items="transformed_rows"
               :items-per-page="50"
               show-select
               item-key="key"
@@ -124,8 +146,8 @@
       const resultsStore = Pinia.defineStore('results', {
         state() {
           return {
-            rows: VueUse.useLocalStorage("rows", []),
-            selected: VueUse.useLocalStorage("selected", [])
+            rows: VueUse.useStorage("rows", []),
+            selected: VueUse.useStorage("selected", [])
           }
         },
         actions: {
@@ -149,9 +171,14 @@
               text: "Sample Text",
               color: "primary"
             },
+            args:{
+              path: "/storage",
+              minsize: 1,
+              checksum: 'sha1',
+              ignoreempty: true,
+            },
             analyze_progress: false,
             delete_progress: false,
-            path: "/storage",
             current_task_id: null,
             task_timeout: undefined,
             size_label: "Bytes",
@@ -165,14 +192,19 @@
             columns:[
               {value: "duptype",text: "Type",},
               {value: "id",text: "ID",},
-              {value: "size",text: "Size",filterable: false,},
-              {value: "priority", text: "Priority",filterable: false, },
+              {value: "size",text: "Size", filterable: false,},
               {value: "name", text: "Name",}
             ]
           };
         },
         computed: {
           ...Pinia.mapWritableState(resultsStore, ['rows', "selected"]),
+          transformed_rows(){
+            return this.rows.map(item=>{
+              var size = Math.round((item.size / this.size_factor) * 100) / 100
+              return {...item, size}
+            })
+          },
           total_size(){
             return this.rows.reduce((a,b)=>{
               return {size: parseInt(a.size) + parseInt(b.size)}
@@ -203,7 +235,7 @@
           run_rdfind(){
             this.analyze_progress = true;
             axios
-              .post("/analyze", {path: this.path})
+              .post("/analyze", this.args)
               .then((res) => {
                 this.current_task_id = res.data.task_id;
                 if (this.task_timeout != undefined)
@@ -218,9 +250,8 @@
                     this.fetch_paginated_rows(res.data.task_id, 1, 1000)
                   },
                   (data) => {
-                    this.error = data.result.error;
-                    this.traceback = data.result.traceback;
                     this.analyze_progress = false;
+                    this.showDialog(data.result.error + "\n" + data.result.traceback)
                   }
                 );
               })
@@ -250,8 +281,7 @@
                   },
                   (data) => {
                     this.delete_progress = false
-                    this.error = data.result.error;
-                    this.traceback = data.result.traceback;
+                    this.showDialog(data.result.error + "\n" + data.result.traceback)
                   });
               })
               .catch((error)=>{

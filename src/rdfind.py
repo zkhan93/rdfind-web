@@ -6,13 +6,39 @@ import os
 
 
 @shared_task(name="analyze")
-def analyze(path):
+def analyze(params):
+    path = params["path"]
     path = os.path.normpath(path)
     if not path.startswith("/storage"):
         return {"error": "location should start with /storage"}
+    print(params)
+    minsize = str(params["minsize"])
+    checksum = params["checksum"]
+    ignoreempty = "true" if params.get("ignoreempty", True) else "false"
     timestamp = int(time.time())
     filename = f"{timestamp}_report.txt"
-    cp = subprocess.run(["rdfind", "-outputname", filename, path], capture_output=True)
+    cp = subprocess.run(
+        [
+            "rdfind",
+            "-minsize",
+            minsize,
+            "-checksum",
+            checksum,
+            "-ignoreempty",
+            ignoreempty,
+            "-outputname",
+            filename,
+            path,
+        ],
+        capture_output=True,
+    )
+    # os.system(f"cp /storage/rdfind-result-test.txt {filename}")
+
+    # class O:
+    #     stderr = b""
+    #     stdout = b"this is a log"
+
+    # cp = O()
 
     # strip first and last line from result file
     os.system(f"sed -i '1d;$d' {filename}")

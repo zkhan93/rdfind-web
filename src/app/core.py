@@ -43,7 +43,7 @@ def get_status(task_id):
             "error": str(task_result.result),
             "traceback": task_result.traceback,
         }
-    if not include_rows and result:
+    if result and "rows" in result and not include_rows:
         del result["rows"]
     res = {"id": task_id, "status": task_result.status, "result": result}
     return jsonify(res)
@@ -66,7 +66,7 @@ def get_result_paginated(task_id):
         rows = result["rows"]
         start = (page - 1) * page_size
         end = page * page_size
-        last_page = math.ceil(len(rows) / page_size)
+        last_page = math.ceil(len(rows) / page_size) or 1
         result = {
             "page": page,
             "next": page + 1 if page < last_page else None,
@@ -79,8 +79,7 @@ def get_result_paginated(task_id):
 
 @bp.route("/analyze", methods=["POST"])
 def run_rdfind():
-    path = request.json["path"]
-    task = rdfind.analyze.delay(path)
+    task = rdfind.analyze.delay(request.json)
     return jsonify(dict(task_id=task.id))
 
 
