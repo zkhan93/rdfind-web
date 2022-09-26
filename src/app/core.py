@@ -4,6 +4,7 @@ import logging
 from flask import jsonify, request, Blueprint
 from utils import create_celery, init_celery
 import rdfind
+import math
 
 # from app import app, celery
 
@@ -33,22 +34,47 @@ def index(file="index"):
 
 @bp.route("/tasks/<task_id>", methods=["GET"])
 def get_status(task_id):
+    include_rows = request.args.get("rows", "true") == "true"
     task_result = celery.AsyncResult(task_id)
     result = task_result.result
 
     if task_result.failed():
-
         result = {
             "error": str(task_result.result),
             "traceback": task_result.traceback,
         }
-    return jsonify(
-        {
-            "id": task_id,
-            "status": task_result.status,
-            "result": result,
+    if not include_rows and result:
+        del result["rows"]
+    res = {"id": task_id, "status": task_result.status, "result": result}
+    return jsonify(res)
+
+
+@bp.route("/tasks/<task_id>/rows", methods=["GET"])
+def get_result_paginated(task_id):
+    page = int(request.args.get("page", "1"))
+    page_size = int(request.args.get("page_size", "100"))
+
+    task_result = celery.AsyncResult(task_id)
+    result = task_result.result
+
+    if task_result.failed():
+        result = {
+            "error": str(task_result.result),
+            "traceback": task_result.traceback,
         }
-    )
+    else:
+        rows = result["rows"]
+        start = (page - 1) * page_size
+        end = page * page_size
+        last_page = math.ceil(len(rows) / page_size)
+        result = {
+            "page": page,
+            "next": page + 1 if page < last_page else None,
+            "page_size": page_size,
+            "last_page": last_page,
+            "result": {"rows": rows[start:end]},
+        }
+    return jsonify(result)
 
 
 @bp.route("/analyze", methods=["POST"])

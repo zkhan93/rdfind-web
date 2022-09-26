@@ -59,7 +59,7 @@
                 <v-row >
                   <v-col class="text-center">
                     <h4>Stats</h4>
-                    <v-btn class="mx-1" :class="{primary: size_label===v}"  x-small v-for="k, v in size_map" @click="size_label=v">{{v}}</v-btn>
+                    <v-btn class="mx-1" :class="{primary: size_label==v}"  x-small v-for="k, v in size_map" :key="k" @click="size_label=v">{{v}}</v-btn>
                   </v-col>
                 </v-row>
                 
@@ -210,11 +210,12 @@
                   clearTimeout(this.task_timeout);
                 this.await_task(
                   res.data.task_id,
+                  false,
                   (data) => {
-                    this.rows.splice(0, this.rows.length);
-                    this.rows.push(...data.result.rows)
                     this.analyze_progress = false;
                     this.showDialog(data.result.stdout)
+                    this.rows.splice(0, this.rows.length)
+                    this.fetch_paginated_rows(res.data.task_id, 1, 1000)
                   },
                   (data) => {
                     this.error = data.result.error;
@@ -237,6 +238,7 @@
                   clearTimeout(this.task_timeout);
                 this.await_task(
                   res.data.task_id,
+                  true,
                   (data) => {
                     this.delete_progress = false
                     if(data.result && data.result.deleted && data.result.deleted.length == this.selected_filenames.length){
@@ -257,8 +259,8 @@
                 this.delete_progress = false;
               })
           },
-          await_task(task_id, success, error) {
-            axios.get(`/tasks/${task_id}`).then((res) => {
+          await_task(task_id, rows, success, error) {
+            axios.get(`/tasks/${task_id}?rows=${rows}`).then((res) => {
               if (res.data.status === "SUCCESS") {
                 success(res.data);
               } else if (
@@ -270,7 +272,7 @@
                 // call this method again in 3 sec
                 if (this.latest_task_id != task_id) {
                   this.task_timeout = setTimeout(() => {
-                    this.await_task(task_id, success, error);
+                    this.await_task(task_id, rows, success, error);
                   }, 1000);
                 }
               }
@@ -290,6 +292,21 @@
           showDialog(content){
             this.dialog.show = true
             this.dialog.content = content
+          },
+          fetch_paginated_rows(task_id, page, page_size){
+            axios
+              .get(`/tasks/${task_id}/rows?page=${page}&page_size=${page_size}`)
+              .then((res) => {
+                console.log(res.data)
+                this.rows.push(...res.data.result.rows)
+                if (res.data.page != res.data.last_page)
+                  setTimeout(() => {
+                    this.fetch_paginated_rows(task_id, res.data.next, res.data.page_size);
+                  }, 100);
+              })
+              .catch(error=>{
+                console.log(error)
+              })
           }
         },
       });
