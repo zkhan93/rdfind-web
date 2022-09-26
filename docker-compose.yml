@@ -21,6 +21,8 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
     restart: unless-stopped
+    volumes:
+      - report:/report
 
   worker:
     image: zkhan93/rdfind-web:master
@@ -42,6 +44,11 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
     depends_on:
       - redis
+    volumes:
+      - report:/report
 
   redis:
     image: redis:7-alpine
+
+volumes:
+  report:
