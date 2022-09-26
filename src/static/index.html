@@ -9,11 +9,53 @@
     <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.min.css" rel="stylesheet">
+    
 
   </head>
   <body>
     <div id="app">
       <v-app>
+        <v-navigation-drawer
+            :mini-variant.sync="drawer.mini"
+            mini-variant-width="128"
+            permanent
+            app
+          >
+            <v-list-item class="px-4">
+              <v-list-item-title>Past Analysis</v-list-item-title>
+              <v-btn
+                icon
+                @click.stop="drawer.mini = !drawer.mini"
+              >
+                <v-icon>mdi-chevron-left</v-icon>
+              </v-btn>
+            </v-list-item>
+
+            <v-divider></v-divider>
+
+            <v-list dense>
+              <v-list-item
+                v-for="item in analysis"
+                :key="item.key"
+                @click="selected_task_id=item.task_id"
+                :three-line="!drawer.mini"
+                :two-line="drawer.mini"
+                style="justify-content: start;"
+              >
+                
+                <v-list-item-content v-if="drawer.mini">
+                  <v-list-item-title>{{date_format(item.timestamp)}} </v-list-item-title>
+                  <v-list-item-subtitle>{{ item.path }}</v-list-item-subtitle>
+                </v-list-item-content>
+
+                <v-list-item-content>
+                  <v-list-item-title>{{ item.task_id }}</v-list-item-title>
+                  <v-list-item-subtitle>{{date_format(item.timestamp)}} </v-list-item-subtitle>
+                  <v-list-item-subtitle>{{ item.path }} | {{item.checksum}} | {{item.minsize}} | {{item.ignoreempty}}</v-list-item-subtitle>
+                </v-list-item-content>
+              </v-list-item>
+            </v-list>
+          </v-navigation-drawer>
         <v-snackbar
         :color="notification.color"
         v-model="notification.show">
@@ -47,10 +89,11 @@
           </v-card>
         </v-dialog>
         <v-main>
+          
           <v-container>
             <v-row center>
               <v-col cols="6">
-                <h4>Start</h4>
+                <h4>New Analysis</h4>
                 <v-text-field v-model="args.path"></v-text-field>
                 <v-row>
                   <v-col>
@@ -82,7 +125,7 @@
               <v-col>
                 <v-row >
                   <v-col class="text-center">
-                    <h4>Stats</h4>
+                    <h4>Selection Stats</h4>
                   </v-col>
                 </v-row>
                 <v-row class="mt-1">
@@ -111,6 +154,7 @@
               :items-per-page="50"
               show-select
               item-key="key"
+              :options="table_options" 
               dense
             >
               <template v-slot:top>
@@ -141,12 +185,13 @@
     <script src="https://unpkg.com/pinia"></script>
     <script src="https://unpkg.com/@vueuse/shared"></script>
     <script src="https://unpkg.com/@vueuse/core"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.2/moment.min.js"></script>
 
     <script>
       const resultsStore = Pinia.defineStore('results', {
         state() {
           return {
-            rows: VueUse.useStorage("rows", []),
+            analysis: VueUse.useStorage("analysis", []),
             selected: VueUse.useStorage("selected", [])
           }
         },
@@ -162,6 +207,9 @@
         pinia: Pinia.createPinia(),
         data() {
           return {
+            drawer: {
+              mini: false,
+            },
             dialog:{
               show: false,
               content: "",
@@ -177,6 +225,12 @@
               checksum: 'sha1',
               ignoreempty: true,
             },
+            table_options:{
+              page: 1,
+              itemsPerPage: 50,
+            },
+            rows: [],
+            selected_task_id: null,
             analyze_progress: false,
             delete_progress: false,
             current_task_id: null,
@@ -188,6 +242,10 @@
               "MB": 1024*1024,
               "GB": 1024*1024*1024
             },
+            current_analysis_page:{
+              page: 1,
+              page_size: 1000
+            },
             search: '',
             columns:[
               {value: "duptype",text: "Type",},
@@ -197,8 +255,14 @@
             ]
           };
         },
+        watch:{
+          selected_task_id(){
+            
+            this.wait_for_rd_analysis_task(this.selected_task_id)
+          },
+        },
         computed: {
-          ...Pinia.mapWritableState(resultsStore, ['rows', "selected"]),
+          ...Pinia.mapWritableState(resultsStore, ['analysis', "selected"]),
           transformed_rows(){
             return this.rows.map(item=>{
               var size = this.round(item.size / this.size_factor)
@@ -225,6 +289,9 @@
           }
         },
         methods: {
+          date_format(datetime){
+            return moment(datetime).fromNow()
+          },
           round(num){
             return Math.round(num * 100) / 100
           },
@@ -236,27 +303,19 @@
               this.selected = val
           },
           run_rdfind(){
+            var key = this.analysis.length
+            var analysis = {
+              key: key,
+              timestamp: new Date(),
+              ...this.args
+            }
             this.analyze_progress = true;
             axios
               .post("/analyze", this.args)
               .then((res) => {
-                this.current_task_id = res.data.task_id;
-                if (this.task_timeout != undefined)
-                  clearTimeout(this.task_timeout);
-                this.await_task(
-                  res.data.task_id,
-                  false,
-                  (data) => {
-                    this.analyze_progress = false;
-                    this.showDialog(data.result.stdout)
-                    this.rows.splice(0, this.rows.length)
-                    this.fetch_paginated_rows(res.data.task_id, 1, 1000)
-                  },
-                  (data) => {
-                    this.analyze_progress = false;
-                    this.showDialog(data.result.error + "\n" + data.result.traceback)
-                  }
-                );
+                analysis.task_id = res.data.task_id;
+                this.analysis.push(analysis)
+                this.wait_for_rd_analysis_task(res.data.task_id)
               })
               .catch((error)=>{
                 console.log(error)
@@ -267,12 +326,9 @@
             axios
               .post("/delete-files", this.selected_filenames)
               .then((res) => {
-                this.current_task_id = res.data.task_id;
-                if (this.task_timeout != undefined)
-                  clearTimeout(this.task_timeout);
-                this.await_task(
-                  res.data.task_id,
-                  true,
+                this.start_await_task(
+                  res.data.task_id, 
+                  true, 
                   (data) => {
                     this.delete_progress = false
                     if(data.result && data.result.deleted && data.result.deleted.length == this.selected_filenames.length){
@@ -285,12 +341,39 @@
                   (data) => {
                     this.delete_progress = false
                     this.showDialog(data.result.error + "\n" + data.result.traceback)
-                  });
+                  }
+                )
               })
               .catch((error)=>{
                 console.log(error)
                 this.delete_progress = false;
               })
+          },
+          wait_for_rd_analysis_task(task_id){
+            this.start_await_task(
+                  task_id, 
+                  false, 
+                  (data) => {
+                    this.analyze_progress = false;
+                    this.showDialog(data.result.stdout)
+                    this.rows.splice(0, this.rows.length)
+                    this.fetch_paginated_rows(task_id, 1, 1000)
+                  },
+                  (data) => {
+                    this.analyze_progress = false;
+                    this.showDialog(data.result.error + "\n" + data.result.traceback)
+                  }
+                )
+          },
+          start_await_task(task_id, rows, onSuccess, onFailure){
+            this.current_task_id = task_id;
+            if (this.task_timeout != undefined)
+              clearTimeout(this.task_timeout);
+            this.await_task(
+                task_id,
+                rows,
+                onSuccess,
+                onFailure);
           },
           await_task(task_id, rows, success, error) {
             axios.get(`/tasks/${task_id}?rows=${rows}`).then((res) => {
@@ -330,12 +413,11 @@
             axios
               .get(`/tasks/${task_id}/rows?page=${page}&page_size=${page_size}`)
               .then((res) => {
-                console.log(res.data)
                 this.rows.push(...res.data.result.rows)
-                if (res.data.page != res.data.last_page)
-                  setTimeout(() => {
-                    this.fetch_paginated_rows(task_id, res.data.next, res.data.page_size);
-                  }, 100);
+                this.current_analysis_page.page = res.data.page
+                this.current_analysis_page.page_size = res.data.page_size
+                this.current_analysis_page.next = res.data.next
+                this.current_analysis_page.last_page = res.data.last_page
               })
               .catch(error=>{
                 console.log(error)

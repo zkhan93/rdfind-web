@@ -1,6 +1,8 @@
 import logging
 import os
 from celery import Celery
+import csv
+from itertools import islice
 
 logging.basicConfig(level=logging.INFO)
 
@@ -37,3 +39,23 @@ def init_celery(celery, app):
 
     celery.Task = ContextTask
     return celery
+
+
+def read_rows_from(filename, start, end):
+    with open(filename, "r") as res:
+        reader = csv.DictReader(
+            res,
+            delimiter=" ",
+            quotechar='"',
+        )
+        rows = list(reader)
+        row_count = len(rows)
+        page_rows = []
+        for index, row in enumerate(rows[start:end]):
+            row["key"] = index + start
+            row["duptype"] = {
+                "DUPTYPE_FIRST_OCCURRENCE": "FIRST",
+                "DUPTYPE_WITHIN_SAME_TREE": "DUPE",
+            }[row["duptype"]]
+            page_rows.append(row)
+        return page_rows, row_count

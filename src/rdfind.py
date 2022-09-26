@@ -11,7 +11,6 @@ def analyze(params):
     path = os.path.normpath(path)
     if not path.startswith("/storage"):
         return {"error": "location should start with /storage"}
-    print(params)
     minsize = str(params["minsize"])
     checksum = params["checksum"]
     ignoreempty = "true" if params.get("ignoreempty", True) else "false"
@@ -45,23 +44,11 @@ def analyze(params):
     os.system(f"sed -i '1s/^. //' {filename}")
     os.system(f"sed -i 's/\/\(.*\)/\"\/\\1\"/' {filename}")
 
-    rows = []
-
-    with open(filename, "r") as res:
-        reader = csv.DictReader(
-            res,
-            delimiter=" ",
-            quotechar='"',
-        )
-        for index, row in enumerate(reader):
-            row["key"] = index
-            row["duptype"] = {
-                "DUPTYPE_FIRST_OCCURRENCE": "FIRST",
-                "DUPTYPE_WITHIN_SAME_TREE": "DUPE",
-            }[row["duptype"]]
-            rows.append(row)
-    os.remove(filename)
-    return {"stdout": cp.stdout.decode(), "stderr": cp.stderr.decode(), "rows": rows}
+    return {
+        "stdout": cp.stdout.decode(),
+        "stderr": cp.stderr.decode(),
+        "filename": filename,
+    }
 
 
 @shared_task(name="delete-files")

@@ -2,7 +2,7 @@ import traceback
 import sys
 import logging
 from flask import jsonify, request, Blueprint
-from utils import create_celery, init_celery
+from utils import create_celery, init_celery, read_rows_from
 import rdfind
 import math
 
@@ -43,8 +43,8 @@ def get_status(task_id):
             "error": str(task_result.result),
             "traceback": task_result.traceback,
         }
-    if result and "rows" in result and not include_rows:
-        del result["rows"]
+    if include_rows:
+        result["rows"] = read_rows_from(result["filename"], 0, None)
     res = {"id": task_id, "status": task_result.status, "result": result}
     return jsonify(res)
 
@@ -63,16 +63,16 @@ def get_result_paginated(task_id):
             "traceback": task_result.traceback,
         }
     else:
-        rows = result["rows"]
         start = (page - 1) * page_size
         end = page * page_size
-        last_page = math.ceil(len(rows) / page_size) or 1
+        rows, total_rows = read_rows_from(result["filename"], start, end)
+        last_page = math.ceil(total_rows / page_size) or 1
         result = {
             "page": page,
             "next": page + 1 if page < last_page else None,
             "page_size": page_size,
             "last_page": last_page,
-            "result": {"rows": rows[start:end]},
+            "result": {"rows": rows},
         }
     return jsonify(result)
 
