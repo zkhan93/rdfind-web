@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>rdfinder</title>
+    
+    <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.min.css" rel="stylesheet">
+
+  </head>
+  <body>
+    <div id="app">
+      <v-app>
+        <v-snackbar
+        :color="notification.color"
+        v-model="notification.show">
+          {{ notification.text }}
+          <template v-slot:action="{ attrs }">
+            <v-btn
+              text
+              v-bind="attrs"
+              @click="notification.show = false"
+            >
+              Close
+            </v-btn>
+          </template>
+        </v-snackbar>
+        <v-dialog v-model="dialog.show">
+
+          <v-card>
+            <v-card-title>Log</v-card-title>
+            <v-card-text>
+              <pre class="block whitespace-pre overflow-x-scroll" >{{dialog.content}}</pre>
+            </v-card-text>
+            <v-card-actions>
+              <v-btn
+                color="primary"
+                text
+                @click="dialog.show = false"
+              >
+                Close
+              </v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+        <v-main>
+          <v-container>
+            <v-row center>
+              <v-col>
+                <h4>Start</h4>
+                <v-text-field v-model="path"></v-text-field>
+                <v-btn small color="primary" @click="run_rdfind" :disabled="analyze_progress" :loading="analyze_progress">Run rdfind</v-btn>
+                <v-btn class="ma-1" small color="warning" @click="clear_session"> Clear Session</v-btn>
+              </v-col>
+              <v-col>
+                <v-row >
+                  <v-col class="text-center">
+                    <h4>Stats</h4>
+                    <v-btn class="mx-1" :class="{primary: size_label===v}"  x-small v-for="k, v in size_map" @click="size_label=v">{{v}}</v-btn>
+                  </v-col>
+                </v-row>
+                
+                <v-row class="mt-1">
+                  <v-col>Total Files: <b>{{rows.length}}</b></v-col>
+                  <v-col class="text-right">Total: <b>{{ Math.round((total_size / size_factor) * 100, 2) / 100}} {{size_label}}</b></v-col>
+                </v-row>
+                <v-row>
+                  <v-col>Selected Files: <b>{{selected.length}}</b></v-col>
+                  <v-col class="text-right">Selected: <b>{{ Math.round((selected_size / size_factor) * 100, 2) / 100}} {{size_label}}</b></v-col>
+                </v-row>
+                
+              </v-col>
+              <v-col>
+                <h4>Actions</h4>
+                <v-btn class="ma-1" small color="error" @click="delete_selected" :loading="delete_progress" :disabled="delete_progress"> Delete selected Files</v-btn>
+                <v-btn class="ma-1" small color="error" disabled> Replace files with hard links</v-btn>
+                
+              </v-col>
+            </v-row>
+            <h3 class="mt-4">Analyzed Files</h3>
+            <v-data-table
+              v-model="selected"
+              :search="search"
+              :headers="columns"
+              :items="rows"
+              :items-per-page="50"
+              show-select
+              item-key="key"
+              dense
+            >
+              <template v-slot:top>
+                  <v-text-field
+                    v-model="search"
+                    append-icon="mdi-magnify"
+                    label="Search"
+                    single-line
+                    hide-details
+                  ></v-text-field>
+              </template>
+            </v-data-table>
+          </v-container>
+        </v-main>
+      </v-app>
+
+    </div>
+    <!-- Import Vue 2 and vuetify -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.x/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.js"></script>
+
+    <!-- Import axios library -->
+    <script src="//unpkg.com/axios@0.27.2/dist/axios.min.js"></script>
+    <!-- Import lodash library -->
+    <!-- <script src="//unpkg.com/lodash@4.17.21"></script> -->
+    <script src="https://unpkg.com/@vue/composition-api"></script>
+    <script src="https://unpkg.com/vue-demi"></script>
+    <script src="https://unpkg.com/pinia"></script>
+    <script src="https://unpkg.com/@vueuse/shared"></script>
+    <script src="https://unpkg.com/@vueuse/core"></script>
+
+    <script>
+      const resultsStore = Pinia.defineStore('results', {
+        state() {
+          return {
+            rows: VueUse.useLocalStorage("rows", []),
+            selected: VueUse.useLocalStorage("selected", [])
+          }
+        },
+        actions: {
+          
+        },
+      })
+      Vue.use(Pinia.PiniaVuePlugin)
+
+      var app = new Vue({
+        el: "#app",
+        vuetify: new Vuetify(),
+        pinia: Pinia.createPinia(),
+        data() {
+          return {
+            dialog:{
+              show: false,
+              content: "",
+            },
+            notification: {
+              show: false,
+              text: "Sample Text",
+              color: "primary"
+            },
+            analyze_progress: false,
+            delete_progress: false,
+            path: "/storage",
+            current_task_id: null,
+            task_timeout: undefined,
+            size_label: "Bytes",
+            size_map: {
+              "Bytes": 1,
+              "KB": 1024,
+              "MB": 1024*1024,
+              "GB": 1024*1024*1024
+            },
+            search: '',
+            columns:[
+              {value: "duptype",text: "Type",},
+              {value: "id",text: "ID",},
+              {value: "size",text: "Size",filterable: false,},
+              {value: "priority", text: "Priority",filterable: false, },
+              {value: "name", text: "Name",}
+            ]
+          };
+        },
+        computed: {
+          ...Pinia.mapWritableState(resultsStore, ['rows', "selected"]),
+          total_size(){
+            return this.rows.reduce((a,b)=>{
+              return {size: parseInt(a.size) + parseInt(b.size)}
+            }, {size: 0}).size
+          },
+          selected_size(){
+            return this.selected.reduce((a,b)=>{
+              return {size: parseInt(a.size) + parseInt(b.size)}
+            }, {size: 0}).size
+          },
+          selected_filenames(){
+            var names = []
+            this.selected.forEach(item=>names.push(item.name))
+            return names
+          },
+          size_factor(){
+            return this.size_map[this.size_label]
+          }
+        },
+        methods: {
+          clear_session(){
+            this.rows.splice(0, this.rows.length)
+            this.selected.splice(0, this.selected.length)
+          },
+          handleSelectionChange(val) {
+              this.selected = val
+          },
+          run_rdfind(){
+            this.analyze_progress = true;
+            axios
+              .post("/analyze", {path: this.path})
+              .then((res) => {
+                this.current_task_id = res.data.task_id;
+                if (this.task_timeout != undefined)
+                  clearTimeout(this.task_timeout);
+                this.await_task(
+                  res.data.task_id,
+                  (data) => {
+                    this.rows.splice(0, this.rows.length);
+                    this.rows.push(...data.result.rows)
+                    this.analyze_progress = false;
+                    this.showDialog(data.result.stdout)
+                  },
+                  (data) => {
+                    this.error = data.result.error;
+                    this.traceback = data.result.traceback;
+                    this.analyze_progress = false;
+                  }
+                );
+              })
+              .catch((error)=>{
+                console.log(error)
+              })
+          },
+          delete_selected(){
+            this.delete_progress = true;
+            axios
+              .post("/delete-files", this.selected_filenames)
+              .then((res) => {
+                this.current_task_id = res.data.task_id;
+                if (this.task_timeout != undefined)
+                  clearTimeout(this.task_timeout);
+                this.await_task(
+                  res.data.task_id,
+                  (data) => {
+                    this.delete_progress = false
+                    if(data.result && data.result.deleted && data.result.deleted.length == this.selected_filenames.length){
+                      this.success_notif("All Selected files deleted!")
+                    }else{
+                      this.error_notif("Some errors were encountered while deleting files!")
+                    }
+                    this.notification.show = true;
+                  },
+                  (data) => {
+                    this.delete_progress = false
+                    this.error = data.result.error;
+                    this.traceback = data.result.traceback;
+                  });
+              })
+              .catch((error)=>{
+                console.log(error)
+                this.delete_progress = false;
+              })
+          },
+          await_task(task_id, success, error) {
+            axios.get(`/tasks/${task_id}`).then((res) => {
+              if (res.data.status === "SUCCESS") {
+                success(res.data);
+              } else if (
+                res.data.status === "FAILURE" ||
+                res.data.status === "REVOKED"
+              ) {
+                error(res.data);
+              } else {
+                // call this method again in 3 sec
+                if (this.latest_task_id != task_id) {
+                  this.task_timeout = setTimeout(() => {
+                    this.await_task(task_id, success, error);
+                  }, 1000);
+                }
+              }
+              // else it being processing in one way or the other
+            });
+          },
+          success_notif(msg){
+            this.notification.show = true
+            this.notification.text = msg
+            this.notification.color="green darken-1"
+          },
+          error_notif(msg){
+            this.notification.show = true
+            this.notification.text = msg
+            this.notification.color="red darken-1"
+          },
+          showDialog(content){
+            this.dialog.show = true
+            this.dialog.content = content
+          }
+        },
+      });
+      
+    </script>
+  </body>
+</html>

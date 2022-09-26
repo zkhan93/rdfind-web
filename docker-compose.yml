@@ -1,0 +1,47 @@
+version: "3"
+
+services:
+  server:
+    build: server
+    ports:
+      - 3000:80
+    command:
+      [
+        "gunicorn",
+        "wsgi:app",
+        "--bind",
+        "0.0.0.0:80",
+        "--workers",
+        "2",
+        "--log-level=info",
+        "--access-logfile",
+        "-"
+      ]
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    restart: unless-stopped
+
+  worker:
+    build: server
+    command:
+      [
+        "celery",
+        "--app",
+        "app.celery",
+        "worker",
+        "--pool",
+        "eventlet",
+        "--autoscale",
+        "10,2",
+        "--loglevel=info",
+        "--concurrency=10"
+      ]
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
