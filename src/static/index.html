@@ -146,8 +146,8 @@
       const resultsStore = Pinia.defineStore('results', {
         state() {
           return {
-            rows: VueUse.useStorage("rows", []),
-            selected: VueUse.useStorage("selected", [])
+            rows: [],
+            selected: []
           }
         },
         actions: {
