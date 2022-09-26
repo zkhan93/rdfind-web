@@ -12,7 +12,7 @@ jobs:
         uses: elgohr/Publish-Docker-Github-Action@master
         with:
           name: zkhan93/rdfind-web
-          dockerfile: src/Dockerfile
+          workdir: src
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
           registry: ghcr.io
