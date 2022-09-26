@@ -5,7 +5,6 @@ from flask import jsonify, request, Blueprint
 from utils import create_celery, init_celery, read_rows_from
 import rdfind
 import math
-import os
 
 # from app import app, celery
 

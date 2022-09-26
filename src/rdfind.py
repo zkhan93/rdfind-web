@@ -16,6 +16,7 @@ def analyze(params):
     ignoreempty = "true" if params.get("ignoreempty", True) else "false"
     timestamp = int(time.time())
     filename = f"{timestamp}_report.txt"
+    filename = os.path.join("/storage", filename)
     cp = subprocess.run(
         [
             "rdfind",
