@@ -264,6 +264,7 @@
         },
         watch:{
           selected_task_id(){
+            this.analyze_progress = true;
             this.wait_for_rd_analysis_task(this.selected_task_id)
           },
           page(){
