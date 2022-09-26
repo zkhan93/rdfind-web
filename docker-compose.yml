@@ -1,8 +1,8 @@
 version: "3"
 
 services:
-  server:
-    build: server
+  web:
+    build: src
     ports:
       - 3000:80
     command:
@@ -23,7 +23,7 @@ services:
     restart: unless-stopped
 
   worker:
-    build: server
+    build: src
     command:
       [
         "celery",

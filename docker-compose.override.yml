@@ -1,9 +1,9 @@
 version: "3"
 
 services:
-  server:
+  web:
     volumes:
-      - ./server:/app
+      - ./src:/app
     command: [ "flask", "run", "--host=0.0.0.0", "--port=80" ]
     environment:
       - FLASK_ENV=development
@@ -11,5 +11,5 @@ services:
 
   worker:
     volumes:
-      - ./server:/app
+      - ./src:/app
       - ./storage:/storage
