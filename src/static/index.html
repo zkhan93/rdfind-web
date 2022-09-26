@@ -88,7 +88,7 @@
                 <v-row class="mt-1">
                   <v-col class="text-center">
                     Files<br/> <b>{{selected.length}}/{{rows.length}}</b><br/>
-                    Size<br> <b>{{ Math.round((selected_size / size_factor) * 100, 2) / 100}}/{{ Math.round((total_size / size_factor) * 100, 2) / 100}} {{size_label}}</b>
+                    Size<br> <b>{{ round(selected_size / size_factor)}}/{{ round(total_size / size_factor)}} {{size_label}}</b>
                     <br/>
                     <v-btn class="mt-3 mx-1" :class="{primary: size_label==v}"  x-small v-for="k, v in size_map" :key="k" @click="size_label=v">{{v}}</v-btn>
                   </v-col>
@@ -146,8 +146,8 @@
       const resultsStore = Pinia.defineStore('results', {
         state() {
           return {
-            rows: [],
-            selected: []
+            rows: VueUse.useStorage("rows", []),
+            selected: VueUse.useStorage("selected", [])
           }
         },
         actions: {
@@ -201,19 +201,19 @@
           ...Pinia.mapWritableState(resultsStore, ['rows', "selected"]),
           transformed_rows(){
             return this.rows.map(item=>{
-              var size = Math.round((item.size / this.size_factor) * 100) / 100
+              var size = this.round(item.size / this.size_factor)
               return {...item, size}
             })
           },
           total_size(){
-            return this.rows.reduce((a,b)=>{
-              return {size: parseInt(a.size) + parseInt(b.size)}
-            }, {size: 0}).size
+            return this.round(this.rows.reduce((a,b)=>{
+              return {size: parseFloat(a.size) + parseFloat(b.size)}
+            }, {size: 0}).size)
           },
           selected_size(){
-            return this.selected.reduce((a,b)=>{
-              return {size: parseInt(a.size) + parseInt(b.size)}
-            }, {size: 0}).size
+            return this.round(this.selected.reduce((a,b)=>{
+              return {size: parseFloat(a.size) + parseFloat(b.size)}
+            }, {size: 0}).size)
           },
           selected_filenames(){
             var names = []
@@ -225,6 +225,9 @@
           }
         },
         methods: {
+          round(num){
+            return Math.round(num * 100) / 100
+          },
           clear_session(){
             this.rows.splice(0, this.rows.length)
             this.selected.splice(0, this.selected.length)
