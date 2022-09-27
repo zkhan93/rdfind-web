@@ -69,3 +69,4 @@ A self-hosted web interface for rdfind for your home server
 ## TODOs
 - optimized delete feature, store only index of rows
 - add a hook to celery task to cleanup rdfind report files 
+- delete saved analysis from nav drawer

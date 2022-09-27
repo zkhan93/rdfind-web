@@ -64,7 +64,7 @@ def get_result_paginated(task_id):
             "error": str(task_result.result),
             "traceback": task_result.traceback,
         }
-    else:
+    elif result:
         start = (page - 1) * page_size
         end = page * page_size
         rows, total_rows = read_rows_from(result["filename"], start, end, sort_field)
@@ -76,6 +76,8 @@ def get_result_paginated(task_id):
             "last_page": last_page,
             "result": {"rows": rows},
         }
+    else:
+        result = {"result": None}
     return jsonify(result)
 
 
