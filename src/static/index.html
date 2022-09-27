@@ -257,7 +257,7 @@
             columns:[
               {value: "duptype",text: "Type",},
               {value: "id",text: "ID",},
-              {value: "size",text: "Size", filterable: false,},
+              {value: "size_factored",text: "Size", filterable: false,},
               {value: "name", text: "Name",}
             ]
           };
@@ -281,8 +281,8 @@
           ...Pinia.mapWritableState(resultsStore, ['analysis', "selected"]),
           transformed_rows(){
             return this.rows.map(item=>{
-              var size = this.round(item.size / this.size_factor)
-              return {...item, size}
+              var size_factored = this.round(item.size / this.size_factor)
+              return {...item, size_factored}
             })
           },
           total_size(){
@@ -436,9 +436,12 @@
             axios
               .get(`/tasks/${task_id}/rows?page=${page}&page_size=${page_size}&sort=${sort}`)
               .then((res) => {
-                this.rows.push(...res.data.result.rows)
-                this.page_count = res.data.last_page
-                console.log(this.page_count)
+                if(res.data.result && res.data.result.rows){
+                  this.rows.push(...res.data.result.rows)
+                  this.page_count = res.data.last_page
+                }
+                else
+                  console.log(res.data)
               })
               .catch(error=>{
                 console.log(error)
