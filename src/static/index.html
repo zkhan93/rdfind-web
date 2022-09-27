@@ -37,22 +37,28 @@
               <v-list-item
                 v-for="item in analysis"
                 :key="item.key"
-                @click="selected_task_id=item.task_id"
+                
                 :three-line="!drawer.mini"
                 :two-line="drawer.mini"
                 style="justify-content: start;"
               >
                 
-                <v-list-item-content v-if="drawer.mini">
+                <v-list-item-content v-if="drawer.mini" @click="selected_task_id=item.task_id">
                   <v-list-item-title>{{date_format(item.timestamp)}} </v-list-item-title>
                   <v-list-item-subtitle>{{ item.path }}</v-list-item-subtitle>
                 </v-list-item-content>
 
-                <v-list-item-content>
+                <v-list-item-content @click="selected_task_id=item.task_id">
                   <v-list-item-title>{{ item.task_id }}</v-list-item-title>
                   <v-list-item-subtitle>{{date_format(item.timestamp)}} </v-list-item-subtitle>
-                  <v-list-item-subtitle>{{ item.path }} | {{item.checksum}} | {{item.minsize}} | {{item.ignoreempty}}</v-list-item-subtitle>
+                  <v-list-item-subtitle>{{ item.path }} | {{item.checksum}} | {{item.minsize}} | {{item.ignoreempty}}
+                  </v-list-item-subtitle>
                 </v-list-item-content>
+                <v-list-item-action>
+                  <v-btn icon @click="remove_analysis(item)">
+                    <v-icon small>mdi-delete</v-icon>
+                  </v-btn>
+                </v-list-item-action>
               </v-list-item>
             </v-list>
           </v-navigation-drawer>
@@ -308,6 +314,10 @@
           }
         },
         methods: {
+          remove_analysis(analysis){
+            var index = this.analysis.findIndex(a => a.task_id == analysis.task_id);
+            this.analysis.splice(index, 1)
+          },
           refetch_page(){
             if(!this.load_progress){
               this.rows.splice(0,this.rows.length)
