@@ -130,8 +130,8 @@
                 </v-row>
                 <v-row class="mt-1">
                   <v-col class="text-center">
-                    Files<br/> <b>{{selected.length}}/{{rows.length}}</b><br/>
-                    Size<br> <b>{{ round(selected_size / size_factor)}}/{{ round(total_size / size_factor)}} {{size_label}}</b>
+                    Files<br/> <b>{{selected.length}} / {{rows.length}}</b><br/>
+                    Size<br> <b>{{ round(selected_size / size_factor)}} / {{ round(total_size / size_factor)}} {{size_label}}</b>
                     <br/>
                     <v-btn class="mt-3 mx-1" :class="{primary: size_label==v}"  x-small v-for="k, v in size_map" :key="k" @click="size_label=v">{{v}}</v-btn>
                   </v-col>
@@ -152,7 +152,8 @@
               :headers="columns"
               :items="transformed_rows"
               item-key="key"
-              :loading="analyze_progress"
+              :disabled="analyze_progress || load_progress"
+              :loading="analyze_progress || load_progress"
               :items-per-page="items_per_page"
               :sort-by.sync="sort_by"
               :sort-desc.sync="sort_desc"
@@ -188,7 +189,7 @@
     <!-- Import axios library -->
     <script src="//unpkg.com/axios@0.27.2/dist/axios.min.js"></script>
     <!-- Import lodash library -->
-    <!-- <script src="//unpkg.com/lodash@4.17.21"></script> -->
+    <script src="https://unpkg.com/lodash@4.17.21"></script>
     <script src="https://unpkg.com/@vue/composition-api"></script>
     <script src="https://unpkg.com/vue-demi"></script>
     <script src="https://unpkg.com/pinia"></script>
@@ -241,6 +242,7 @@
             sort_desc: false,
             rows: [],
             selected_task_id: null,
+            load_progress: false,
             analyze_progress: false,
             delete_progress: false,
             current_task_id: null,
@@ -257,7 +259,7 @@
             columns:[
               {value: "duptype",text: "Type",},
               {value: "id",text: "ID",},
-              {value: "size_factored",text: "Size", filterable: false,},
+              {value: "size",text: "Size", filterable: false,},
               {value: "name", text: "Name",}
             ]
           };
@@ -281,19 +283,20 @@
           ...Pinia.mapWritableState(resultsStore, ['analysis', "selected"]),
           transformed_rows(){
             return this.rows.map(item=>{
-              var size_factored = this.round(item.size / this.size_factor)
-              return {...item, size_factored}
+              var size_bytes = item.size
+              var size = this.round(item.size / this.size_factor)
+              return {...item, size, size_bytes}
             })
           },
           total_size(){
-            return this.round(this.rows.reduce((a,b)=>{
+            return this.round(this.rows.reduce((a, b)=>{
               return {size: parseFloat(a.size) + parseFloat(b.size)}
             }, {size: 0}).size)
           },
           selected_size(){
             return this.round(this.selected.reduce((a,b)=>{
-              return {size: parseFloat(a.size) + parseFloat(b.size)}
-            }, {size: 0}).size)
+              return {size_bytes: parseFloat(a.size_bytes) + parseFloat(b.size_bytes)}
+            }, {size_bytes: 0}).size_bytes)
           },
           selected_filenames(){
             var names = []
@@ -306,8 +309,11 @@
         },
         methods: {
           refetch_page(){
-            this.rows.splice(0,this.rows.length)
-            this.fetch_paginated_rows(this.selected_task_id, this.page, this.items_per_page)
+            if(!this.load_progress){
+              this.rows.splice(0,this.rows.length)
+              this.load_progress = true;
+              this.fetch_paginated_rows(this.selected_task_id, this.page, this.items_per_page)
+            }
           },
           date_format(datetime){
             return moment(datetime).fromNow()
@@ -436,12 +442,15 @@
             axios
               .get(`/tasks/${task_id}/rows?page=${page}&page_size=${page_size}&sort=${sort}`)
               .then((res) => {
+                this.load_progress = false;
                 if(res.data.result && res.data.result.rows){
                   this.rows.push(...res.data.result.rows)
                   this.page_count = res.data.last_page
+                  
                 }
                 else
                   console.log(res.data)
+                
               })
               .catch(error=>{
                 console.log(error)
